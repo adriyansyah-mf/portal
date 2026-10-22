@@ -1,0 +1,51 @@
+services:
+  portal:
+    build:
+      context: .
+    restart: unless-stopped
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3000
+      PUBLIC_ORIGIN: https://${PORTAL_DOMAIN:?Set PORTAL_DOMAIN in .env}
+      MIKROTIK_URL: ${MIKROTIK_URL:?Set MIKROTIK_URL in .env}
+      MIKROTIK_USERNAME: ${MIKROTIK_USERNAME:?Set MIKROTIK_USERNAME in .env}
+      MIKROTIK_PASSWORD: ${MIKROTIK_PASSWORD:?Set MIKROTIK_PASSWORD in .env}
+      NODE_EXTRA_CA_CERTS: ${NODE_EXTRA_CA_CERTS:-}
+      TRUST_PROXY: "true"
+    volumes:
+      - ./certs:/certs:ro
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - backend
+
+  caddy:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    environment:
+      PORTAL_DOMAIN: ${PORTAL_DOMAIN:?Set PORTAL_DOMAIN in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - backend
+    depends_on:
+      - portal
+
+networks:
+  backend:
+
+volumes:
+  caddy_data:
+  caddy_config:

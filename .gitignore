@@ -1,0 +1,10 @@
+.env
+certs/
+node_modules/
+test-results/
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.tar
+*.tar.gz
