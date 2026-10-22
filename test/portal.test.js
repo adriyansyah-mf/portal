@@ -9,7 +9,7 @@ const origin = 'https://wifi.example.test';
 const valid = { username: 'alex', currentPassword: 'old-password', newPassword: 'fresh-password!', confirmPassword: 'fresh-password!' };
 
 async function fixture(t, overrides = {}, appOptions = {}) {
-  const state = { password: valid.currentPassword, patches: [], queries: [], ...overrides };
+  const state = { password: valid.currentPassword, patches: [], queries: [], showSensitive: [], ...overrides };
   const router = createServer(async (request, response) => {
     assert.equal(request.headers.authorization, `Basic ${Buffer.from('portal:router-secret').toString('base64')}`);
     const url = new URL(request.url, 'http://router');
@@ -18,9 +18,14 @@ async function fixture(t, overrides = {}, appOptions = {}) {
       response.writeHead(403);
       return response.end(JSON.stringify({ message: 'router-secret internal diagnostic' }));
     }
-    if (request.method === 'GET') {
-      state.queries.push(url.searchParams.get('name'));
-      const users = state.missing ? [] : [{ '.id': '*A', name: valid.username, password: state.password, disabled: state.disabled ?? 'false' }];
+    if (request.method === 'POST' && url.pathname.endsWith('/print')) {
+      let body = '';
+      for await (const chunk of request) body += chunk;
+      const command = JSON.parse(body);
+      state.queries.push(command['.query']);
+      state.showSensitive.push(command['show-sensitive']);
+      const password = command['show-sensitive'] === '' ? state.password : '*****';
+      const users = state.missing ? [] : [{ '.id': '*A', name: valid.username, password, disabled: state.disabled ?? 'false' }];
       return response.end(JSON.stringify(users));
     }
     assert.equal(request.method, 'PATCH');
@@ -53,7 +58,8 @@ test('changes exactly the authenticated hotspot account through the router API',
   const response = await post();
   assert.equal(response.status, 200);
   assert.deepEqual(state.patches, [{ password: valid.newPassword }]);
-  assert.deepEqual(state.queries, ['alex']);
+  assert.deepEqual(state.queries, [['name=alex']]);
+  assert.deepEqual(state.showSensitive, ['']);
   const body = await response.text();
   assert.match(body, /updated/);
   assert.ok(!body.includes(valid.newPassword));
